@@ -2,3 +2,5 @@ venv/
 .vscode/
 __pycache__/
 debug/
+tempCodeRunnerFile.py
+test_songs/
