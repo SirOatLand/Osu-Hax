@@ -13,15 +13,12 @@ screen_w = screen_w + SECOND_MONITOR
 def set_cursor(x, y):
     ctypes.windll.user32.SetCursorPos(x, y)
     print(x, y)
-    time.sleep(0.05)
 
 def mouse_leftdown():
     ctypes.windll.user32.mouse_event(MOUSE_LEFTDOWN,0,0,0,0)
-    time.sleep(0.05)
 
 def mouse_leftup():
     ctypes.windll.user32.mouse_event(MOUSE_LEFTUP,0,0,0,0)
-    time.sleep(0.05)
 
 def is_time(ms, start_time):
     target = ms / 1000
