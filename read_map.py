@@ -205,6 +205,7 @@ def read_osu_file(filepath):
     hitobjects = []
     timing_points: List[TimingPoint] = []
     slider_multiplier = 1.0
+    approach_rate = None
 
     section = None
     with open(filepath, "r", encoding="utf8") as f:
@@ -223,6 +224,16 @@ def read_osu_file(filepath):
                 if line.startswith("SliderMultiplier:"):
                     try:
                         slider_multiplier = float(line.split(":", 1)[1].strip())
+                    except Exception:
+                        pass
+                elif line.startswith("OverallDifficulty:"):
+                    try:
+                        overall_dificulty = float(line.split(":", 1)[1].strip())
+                    except Exception:
+                        pass
+                elif line.startswith("ApproachRate:"):
+                    try:
+                        approach_rate = float(line.split(":", 1)[1].strip())
                     except Exception:
                         pass
 
@@ -255,16 +266,29 @@ def read_osu_file(filepath):
             elif section == "[HitObjects]":
                 hitobjects.append(parse_hitobject(line))
 
-    return hitobjects, timing_points, slider_multiplier
+    return hitobjects, timing_points, slider_multiplier, overall_dificulty, approach_rate
 
 def prep_osu_objects(filepath):
     # Read file
-    hitobjects, timing_points, slider_multiplier = read_osu_file(filepath)
+    hitobjects, timing_points, slider_multiplier, overall_dificulty, approach_rate = read_osu_file(filepath)
+
+
+    # calculate AR delay based on https://osu.ppy.sh/wiki/en/Beatmap/Approach_rate
+    if approach_rate is None:
+        approach_rate = overall_dificulty
+
+    if approach_rate <= 5: 
+        AR_delay = 1200 + 120 * (5 - approach_rate)
+    elif approach_rate:
+        AR_delay = 1200 - 150 * (approach_rate - 5)
+
+    # calculate hit delay for perfect hit
+    time_delay_300 =  ((80 - (6 * overall_dificulty) + AR_delay) / 1000)
 
     # Get Slider timing (duration + end_time)
     hitobjects = compute_slider_timings(hitobjects, timing_points, slider_multiplier)
 
-    return hitobjects, timing_points, slider_multiplier
+    return hitobjects, timing_points, slider_multiplier, time_delay_300
 
 if __name__ == "__main__":
     osu_objects = read_osu_file('./test_songs/cin1.osu')
