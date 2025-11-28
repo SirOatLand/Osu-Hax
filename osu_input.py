@@ -1,28 +1,99 @@
 import pyautogui
-from config import SECOND_MONITOR
+import ctypes
+from config import *
 from read_map import *
+import time
+import win32gui
 
 global screen_w, screen_h
 screen_w, screen_h = pyautogui.size()
 screen_w = screen_w + SECOND_MONITOR
 
-def offset_moveTo(x, y, duration):
-    x = x + SECOND_MONITOR
-    pyautogui.moveTo(x, y, duration)
+
+def set_cursor(x, y):
+    ctypes.windll.user32.SetCursorPos(x, y)
+    print(x, y)
+    time.sleep(0.05)
+
+def mouse_leftdown():
+    ctypes.windll.user32.mouse_event(MOUSE_LEFTDOWN,0,0,0,0)
+    time.sleep(0.05)
+
+def mouse_leftup():
+    ctypes.windll.user32.mouse_event(MOUSE_LEFTUP,0,0,0,0)
+    time.sleep(0.05)
 
 def is_time(ms, start_time):
     target = ms / 1000
     now = time.perf_counter()
     return (now - start_time) >= target
 
-def osu_to_screen(x, y):
-    osu_width = 512
-    osu_height = 384
+def find_osu_window():
+    result = [None]  # store hwnd in a mutable list
     
-    sx = int(x / osu_width * screen_w)
-    sy = int(y / osu_height * screen_h)
+    def callback(hwnd, _):
+        title = win32gui.GetWindowText(hwnd)
+        if title.startswith("osu!"):
+            result[0] = hwnd
 
-    return sx, sy
+    win32gui.EnumWindows(callback, None)
+    return result[0]
+
+def get_osu_client_rect():
+        hwnd_osu = find_osu_window()
+    
+        # left, top, right, bottom in client coordinates
+        left, top, right, bottom = win32gui.GetClientRect(hwnd_osu)
+
+        # convert top-left & bottom-right to absolute screen coords
+        tl = win32gui.ClientToScreen(hwnd_osu, (left, top))
+        br = win32gui.ClientToScreen(hwnd_osu, (right, bottom))
+
+        return tl[0], tl[1], br[0], br[1]
+
+
+def osu_to_screen(osu_x, osu_y):
+    # Get CLIENT RECT (width & height)
+    left, top, right, bottom = get_osu_client_rect()
+    osu_w = right - left
+    osu_h = bottom - top
+
+    # Compute playfield size
+    play_h = 0.8 * osu_h
+    play_w = (4 / 3) * play_h
+
+    # Center horizontally, center vertically, then apply 2% downward offset
+    play_left = (osu_w - play_w) / 2
+    play_top  = (osu_h - play_h) / 2 + play_h * 0.02
+
+    # Scale factor
+    osu_scale = play_h / 384  # = play_w / 512
+
+    # Final position inside client → convert to screen space
+    screen_x = int(osu_x * osu_scale + play_left + left)
+    screen_y = int(osu_y * osu_scale + play_top  + top)
+
+    return screen_x, screen_y
+
+
+def wait_for_title_change(timeout=5):
+    hwnd = find_osu_window()
+
+    start_title = win32gui.GetWindowText(hwnd)
+    print(f"[INFO] Initial title: {start_title}")
+
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        new_title = win32gui.GetWindowText(hwnd)
+        if new_title != start_title:
+            print(f"[INFO] Title changed!")
+            print(f"[INFO] New title: {new_title}")
+            return new_title
+        time.sleep(0.01)  # 10 ms polling, very accurate
+
+    print("[WARN] Timeout waiting for title change.")
+    return None
 
 class CircleAction:
     def __init__(self, obj):
@@ -33,9 +104,9 @@ class CircleAction:
     def update(self, t):
         if not self.done:
             x, y = osu_to_screen(self.obj.x, self.obj.y)
-            offset_moveTo(x, y, duration=0)
-            pyautogui.mouseDown()
-            pyautogui.mouseUp()
+            set_cursor(x, y)
+            mouse_leftdown()
+            mouse_leftup()
             self.done = True
     
 class SliderAction:
@@ -69,7 +140,7 @@ class SliderAction:
         px, py = self.curve[idx]
 
         sx, sy = osu_to_screen(px, py)
-        offset_moveTo(sx, sy, duration=0)
+        set_cursor(sx, sy)
 
         if progress >= 1:
             self.done = True
@@ -94,7 +165,7 @@ class SpinnerAction:
         sx = cx + r * math.cos(self.angle)
         sy = cy + r * math.sin(self.angle)
 
-        offset_moveTo(sx, sy, duration=0)
+        set_cursor(sx, sy)
         self.angle += 0.35
 
     
