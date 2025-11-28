@@ -283,12 +283,12 @@ def prep_osu_objects(filepath):
         AR_delay = 1200 - 150 * (approach_rate - 5)
 
     # calculate hit delay for perfect hit
-    time_delay_300 =  ((80 - (6 * overall_dificulty) + AR_delay) / 1000)
+    time_delay_300 =  ((80 - (6 * overall_dificulty)) / 1000)
 
     # Get Slider timing (duration + end_time)
     hitobjects = compute_slider_timings(hitobjects, timing_points, slider_multiplier)
 
-    return hitobjects, timing_points, slider_multiplier, time_delay_300
+    return hitobjects, timing_points, slider_multiplier, time_delay_300 
 
 if __name__ == "__main__":
     osu_objects = read_osu_file('./test_songs/cin1.osu')
