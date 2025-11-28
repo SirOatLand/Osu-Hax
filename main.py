@@ -54,9 +54,18 @@ def main(save_image_mode, song_path):
     pyautogui.mouseDown()
     pyautogui.mouseUp()
 
-    # wait_for_title_change()
-    start_time = time.perf_counter()
-    
+    wait_for_title_change()
+    while True:
+        left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
+        shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
+        if left_click & shift_pressed:
+            start_time = osu_objects[0].time/1000
+            osu_index += 1
+            break
+        else:
+            pass
+
+    initial_timestamp = time.perf_counter()
     while True:
         loop_start = time.time()
         if latest_frame is not None:
@@ -69,18 +78,19 @@ def main(save_image_mode, song_path):
 
             # ============= Normal Capture =============
             else:
+                cv2.imshow("Fake Osu", screenshot)
                 pass
-                # cv2.imshow("Fake Osu", screenshot)
 
 
         # ============= Osu Input =============
-        now_t = time.perf_counter() - start_time
+        now_t = time.perf_counter() + start_time - initial_timestamp
         obj = osu_objects[osu_index]
         if current_action is None:
             print(
-                f"OBJ={obj}, curr_time={now_t}, time={obj.time/1000 + time_delay_300}, type={obj.type}",
+                f"OBJ={obj}, curr_time={now_t}, time={obj.time/1000 + time_delay_300}, delay={time_delay_300}, index={osu_index}",
             )
-            if now_t >= (obj.time / 1000) + time_delay_300:
+            pass
+            if now_t >= (obj.time / 1000):
                 if isinstance(obj, HitCircle):
                     current_action = CircleAction(obj)
 
@@ -106,7 +116,7 @@ def main(save_image_mode, song_path):
         
         # ============= FPS Counter =============
         key = cv2.waitKey(1)
-        if key == ord('f'):
+        if key == ord('f') or (ctypes.windll.user32.GetAsyncKeyState(0x46) & 0x0001):
             try:
                 print("FPS:", 1 / (time.time() - loop_start))
             except ZeroDivisionError:
@@ -116,8 +126,6 @@ def main(save_image_mode, song_path):
         if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
             cv2.destroyAllWindows()
             break
-
-        time.sleep(0.0005)
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
