@@ -41,21 +41,22 @@ def main(save_image_mode, song_path):
     global current_action
     global timing_points
     global slider_multiplier
-    
-    start_time = time.perf_counter()
+
     capture.start_free_threaded()
     screenshot = None
 
-    osu_objects, timing_points, slider_multiplier = prep_osu_objects(song_path)
+    osu_objects, timing_points, slider_multiplier, time_delay_300 = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
-    
-    print(osu_objects)
 
-    pyautogui.moveTo(1800 + SECOND_MONITOR, 500)
+    osu_start_x, osu_start_y  = osu_to_screen(320, 170)
+    pyautogui.moveTo(osu_start_x, osu_start_y)
     pyautogui.mouseDown()
     pyautogui.mouseUp()
-    time.sleep(3)
+
+    # wait_for_title_change()
+    start_time = time.perf_counter()
+    
     while True:
         loop_start = time.time()
         if latest_frame is not None:
@@ -77,9 +78,9 @@ def main(save_image_mode, song_path):
         obj = osu_objects[osu_index]
         if current_action is None:
             print(
-                f"OBJ={obj}, curr_time={now_t}, time={obj.time/1000}, type={obj.type}",
+                f"OBJ={obj}, curr_time={now_t}, time={obj.time/1000 + time_delay_300}, type={obj.type}",
             )
-            if now_t >= obj.time / 1000:
+            if now_t >= (obj.time / 1000) + time_delay_300:
                 if isinstance(obj, HitCircle):
                     current_action = CircleAction(obj)
 
@@ -112,7 +113,7 @@ def main(save_image_mode, song_path):
                 pass
 
         # ============= Exit =============
-        if key == ord('q'):
+        if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
             cv2.destroyAllWindows()
             break
 
