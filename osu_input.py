@@ -4,6 +4,8 @@ from config import *
 from read_map import *
 import time
 import win32gui
+import math
+from slidercalculation import bezier_point, sample_curve, point_at_progress, sample_polyline
 
 global screen_w, screen_h
 screen_w, screen_h = pyautogui.size()
@@ -12,7 +14,6 @@ screen_w = screen_w + SECOND_MONITOR
 
 def set_cursor(x, y):
     ctypes.windll.user32.SetCursorPos(x, y)
-    print(x, y)
 
 def mouse_leftdown():
     ctypes.windll.user32.mouse_event(MOUSE_LEFTDOWN,0,0,0,0)
@@ -107,40 +108,59 @@ class CircleAction:
             self.done = True
     
 class SliderAction:
-    def __init__(self, obj, timing_point, sv, slider_multiplier):
+    def __init__(self, obj):
         self.obj = obj
         self.done = False
         self.type = 2
+        self.endTime = obj.time + obj.duration_ms
 
-        beat_length = timing_point.beat_length
-        
-        px_per_beat = slider_multiplier * 100 * sv
-        beats = obj.length / px_per_beat
-        
-        self.duration = beats * beat_length * obj.slides
-        self.endTime = obj.time + self.duration
+        # --- Build full curve control points ---
+        cp = [(obj.x, obj.y)] + obj.points
 
-        # path
-        self.curve = [(obj.x, obj.y)] + obj.points
+        # --- L-type: simple lerp between endpoints ---
+        if obj.curveType == "L":
+            self.samples, self.dists = sample_polyline(cp, n_per_segment=12)
+            return
+
+        # --- B-type: sample full bezier ---
+        if obj.curveType == "B":
+            eval_fn = lambda t: bezier_point(cp, t)
+            self.samples, self.dists = sample_curve(eval_fn, n=300)
+            return
+
+        print("Unsupported curve type:", obj.curveType)
 
     def update(self, t):
         if self.done:
             return
-        
+
         start_t = self.obj.time / 1000
-        end_t   = self.endTime / 1000
+        end_t = self.endTime / 1000
 
-        progress = (t - start_t) / (end_t - start_t)
-        progress = max(0, min(progress, 1))
+        # raw slider progress
+        progress_raw = (t - start_t) / (end_t - start_t)
+        progress_raw = max(0, min(progress_raw, 1))
 
-        idx = int(progress * (len(self.curve) - 1))
-        px, py = self.curve[idx]
+        # slidebacks
+        total = progress_raw * self.obj.slides
+        slide_index = int(total)
+        slide_pos = total - slide_index
+
+        if slide_index % 2 == 0:
+            progress = slide_pos
+        else:
+            progress = 1 - slide_pos
+
+        # get arc-length-correct point
+        px, py = point_at_progress(self.samples, self.dists, progress)
 
         sx, sy = osu_to_screen(px, py)
         set_cursor(sx, sy)
-
-        if progress >= 1:
+        mouse_leftdown()
+        if progress_raw  >= 1:
+            mouse_leftup()
             self.done = True
+
 
 class SpinnerAction:
     def __init__(self, obj):
@@ -153,17 +173,20 @@ class SpinnerAction:
 
     def update(self, t):
         if t >= self.end_t:
+            mouse_leftup()
             self.done = True
             return
 
         cx, cy = osu_to_screen(self.obj.x, self.obj.y)
-        r = 150
+        r = 50
 
-        sx = cx + r * math.cos(self.angle)
-        sy = cy + r * math.sin(self.angle)
+        sx = int(cx + r * math.cos(self.angle))
+        sy = int(cy + r * math.sin(self.angle))
 
         set_cursor(sx, sy)
+        mouse_leftdown()
         self.angle += 0.35
+
 
     
 
