@@ -87,7 +87,7 @@ def main(save_image_mode, song_path):
         obj = osu_objects[osu_index]
         if current_action is None:
             print(
-                f"OBJ={obj}, curr_time={now_t}, time={obj.time/1000 + time_delay_300}, delay={time_delay_300}, index={osu_index}",
+                f"OBJ={obj}, curr_time={now_t:.5f}, time={(obj.time/1000):.5f}, index={osu_index}",
             )
             pass
             if now_t >= (obj.time / 1000):
@@ -95,15 +95,7 @@ def main(save_image_mode, song_path):
                     current_action = CircleAction(obj)
 
                 elif isinstance(obj, Slider):
-                    curr_uninherited_tp = get_active_uninherited_timing(timing_points, obj.time)
-                    curr_inherited_tp = get_active_inherited_timing(timing_points, obj.time)
-
-                    if curr_inherited_tp is None:
-                        sv = 1.0
-                    else:
-                        sv = 100.0 / abs(curr_inherited_tp.beat_length)
-
-                    current_action = SliderAction(obj, curr_uninherited_tp, sv, slider_multiplier)
+                    current_action = SliderAction(obj)
 
                 elif isinstance(obj, Spinner):
                     current_action = SpinnerAction(obj)
@@ -124,9 +116,9 @@ def main(save_image_mode, song_path):
 
         # ============= Exit =============
         if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
-            cv2.destroyAllWindows()
+            # cv2.destroyAllWindows()
             break
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_oat.osu")
