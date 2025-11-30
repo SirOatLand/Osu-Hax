@@ -1,4 +1,6 @@
 import time
+
+
 import cv2
 import numpy as np
 import pyautogui
@@ -10,14 +12,14 @@ from save_image import save_image
 from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
-from coord_queue import CoordQueue
+from coord_queue import CoordQueue, infer_to_queue
 from inference import get_model
 import supervision as svi
+from collections import deque
 
 latest_frame = None
 current_action = None
 
-MIN_CONFIDENCE = 0.85
 
 capture = WindowsCapture(
     cursor_capture=None,
@@ -30,67 +32,6 @@ capture = WindowsCapture(
 def frame_to_numpy(frame: Frame):
     buf = frame.frame_buffer
     return cv2.cvtColor(buf, cv2.COLOR_BGRA2BGR)
-
-
-def infer_to_queue(results, coord_queue, image_x, image_y):
-    for pred in results.predictions:
-        cls_name = pred.class_name  # or pred.class_name / pred.label depending on your YOLO version
-        conf = pred.confidence  # usually between 0–1
-        x = pred.x
-        y = pred.y
-        # print(conf)
-
-        # 1. Filter by class
-        if cls_name not in {"circle", "slider_head"}:
-            continue
-
-        # 2. Filter by confidence threshold
-        if conf < MIN_CONFIDENCE:
-            continue
-
-        # 3. Convert coordinates
-        x, y = ai_to_screen(x, y, image_x, image_y)
-
-        # 4. Add to queue
-        coord_queue.add(x, y, cls_name)
-
-
-def infer_to_queue(results, coord_queue, image_x, image_y, ar_delay):
-    now = time.perf_counter()  # current timestamp for detection
-
-    for pred in results.predictions:
-        cls_name = pred.class_name
-        conf = pred.confidence
-        x = pred.x
-        y = pred.y
-
-        # 1. Filter by class
-        if cls_name not in {"circle", "slider_head"}:
-            continue
-
-        # 2. Filter by confidence threshold
-        if conf < MIN_CONFIDENCE:
-            continue
-
-        # 3. Convert coordinates to screen space
-        x, y = ai_to_screen(x, y, image_x, image_y)
-
-        # 4. Add to queue with timestamp and ar_delay
-        coord_queue.add(x, y, cls_name, time_detected=now, ar_delay=ar_delay)
-
-
-def find_disappeared_coords(old_list, new_list, thresh=30):
-    disappeared = []
-    for (ox, oy, ocls) in old_list:
-        found = False
-        for (nx, ny, ncls) in new_list:
-            # same class AND close coordinate → still present
-            if ncls == ocls and math.hypot(nx - ox, ny - oy) <= thresh:
-                found = True
-                break
-        if not found:
-            disappeared.append((ox, oy, ocls))
-    return disappeared
 
 
 @capture.event
@@ -118,6 +59,7 @@ def main(save_image_mode, song_path):
     osu_objects, timing_points, slider_multiplier, time_delay_300, AR_delay = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
+    AR_delay = AR_delay/1000 - AR_DELAY_OFFSET
 
     osu_start_x, osu_start_y = osu_to_screen(320, 170)
     pyautogui.moveTo(osu_start_x, osu_start_y)
@@ -128,7 +70,7 @@ def main(save_image_mode, song_path):
         model_id="osu-project-2-9xzrs/2",
         api_key="n9ZqQYFxrPZCCverE0Lh"
     )
-    coord_queue = CoordQueue(threshold=25, cooldown_time=0.1)
+    coord_queue = CoordQueue(threshold=OBJ_THRESHOLD, cooldown_time=OBJ_COOLDOWN, min_detect_count=OBJ_MIN_COUNT)
     wait_for_title_change()
     wait_for_title_change(timeout=10)
     while True:
@@ -146,97 +88,93 @@ def main(save_image_mode, song_path):
 
     initial_timestamp = time.perf_counter()
 
-    # Persistent list of items that disappeared over multiple frames
-    long_disappeared_list = []
 
-    # Dictionary to count consecutive missing frames
-    missing_counts = {}  # key = (x, y, cls)
-
-    MISSING_THRESHOLD = 1  # number of consecutive frames before we flag
 
     while osu_index < len(osu_objects):
-
+        loop_start = time.time()
         # ========== FRAME PROCESSING ==========
         if latest_frame is not None:
             screenshot = frame_to_numpy(latest_frame)
-
-            # Save persistent previous detections
-            old_coords = list(coord_queue.queue)
-
-            # Run inference for NEW detections only
             results = model.infer(screenshot)[0]
-            new_coords = infer_to_coords(
-                results, screenshot.shape[1], screenshot.shape[0]
-            )
             infer_to_queue(results, coord_queue, screenshot.shape[1], screenshot.shape[0])
-            results = []
+            results = None
 
-        # ========== 1. DETECT DISAPPEARED COORDS ==========
-        disappeared = find_disappeared_coords(old_coords, new_coords)
-        print(old_coords, new_coords, disappeared)
+        now = time.perf_counter()
+        ready_to_process = []
 
-        # Increment missing counts for disappeared items
-        for c in disappeared:  # each c is a tuple (x, y, cls)
-            key = c
-            if key in missing_counts:
-                missing_counts[key] += 1
-            else:
-                missing_counts[key] = 1
+        # Iterate through the queue without removing items
+        for item in coord_queue.queue:
+            x, y, cls, time_detected = item
+            # print(now, time_detected, AR_delay, now - time_detected)
+            if now - time_detected >= AR_delay:
+                ready_to_process.append(item)
 
-            # If missing enough frames → flag it
-            if missing_counts[key] >= MISSING_THRESHOLD and key not in long_disappeared_list:
-                long_disappeared_list.append(key)
-                print(f"[LONG DISAPPEARED] Coordinate missing over {MISSING_THRESHOLD} frames: {key}")
-
-        # Reset counts for coordinates that are still present
-        for c in new_coords:  # still visible this frame
-            key = c
-            if key in missing_counts:
-                missing_counts[key] = 0
-
-        if disappeared:
-            print("[INFO] Disappeared coords:", disappeared)
-
-        # Process each disappeared coordinate
-        for (dx, dy, dcls) in disappeared:
-
+        action = None
+        for (dx, dy, dcls, ntime) in ready_to_process:
+            # print(f"To process: {dx, dy, dcls, ntime}")
             # Remove from queue (non-class-based removal)
-            coord_queue.remove(dx, dy, dcls)
+            # coord_queue.remove(dx, dy, dcls, ntime)
 
             # ========== 2. MATCH TO NEXT OSU OBJECT ==========
-            while osu_index < len(osu_objects):
+            while osu_index < len(osu_objects) and current_action is None:
                 obj = osu_objects[osu_index]
-
+                print(f"Obtained object is {obj}")
                 # Match based on expected class logic
                 if isinstance(obj, HitCircle) and dcls == "circle":
                     action = CircleAction(obj, dx, dy)
+                    coord_queue.remove(dx, dy, dcls, ntime)
                     break
 
-                elif isinstance(obj, Slider) and dcls == "slider_head":
-                    action = SliderAction(obj, dx, dy)
-                    break
+                now = time.perf_counter() + start_time - initial_timestamp
+                print(f"Now is {now}")
+                if isinstance(obj, Slider):
+                    print(f"Now is {now}, waiting for {obj.time/1000}.")
+                    if now >= (obj.time / 1000):
+                        print("Condition passed")
+                        action = SliderAction(obj)
+                        coord_queue.remove(dx, dy, dcls, ntime)
+                        break
+                    print("Condition not passed")
 
-                elif isinstance(obj, Spinner) and dcls == "spinner":
-                    action = SpinnerAction(obj)
-                    break
+                elif isinstance(obj, Spinner):
+                    if now >= (obj.time / 1000):
+                        action = SpinnerAction(obj)
+                        coord_queue.remove(dx, dy, dcls, ntime)
+                        break
 
                 else:
-                    # Not matching → advance to next osu object
-                    print(f"[SKIP] {obj} does not match popped class {dcls}")
-                    osu_index += 1
+                    obj_close = False
+                    skip_steps = 0
+                    for i in range(osu_index, osu_index+OSU_LOOKAHEAD):
+                        if isinstance(osu_objects[i], Slider):
+                            obj_close = True
+                            skip_steps = i-osu_index
+                            break
+                    if obj_close:
+                        print(f"Skipping from {obj} to {dcls}. Step is {skip_steps}")
+                        osu_index += skip_steps
+                    else:
+                        coord_queue.remove(dx, dy, dcls, ntime)
+                        break
+            # print(f"End of class {dcls}")
+        # print(f"Process length: {len(ready_to_process)}")
+        # for item in ready_to_process:
+        #     coord_queue.remove(*item)
+        # ========== 3. CREATE ACTION FOR MATCHED OBJECT ==========
+        current_action = action
+        # print(f"Current action is {action}")
 
-            # ========== 3. CREATE ACTION FOR MATCHED OBJECT ==========
-            current_action = action
-
-            # Increment to next osu object
-            osu_index += 1
 
         # ========== 4. UPDATE ONGOING ACTION ==========
         if current_action is not None:
+            # print(f"Doing action {action}")
             now_t = time.perf_counter() + start_time - initial_timestamp
             current_action.update(now_t)
             if current_action.done:
+                print("Action done")
                 current_action = None
+                osu_index += 1
+
 
         # ============= FPS Counter =============
         key = cv2.waitKey(1)
@@ -254,4 +192,4 @@ def main(save_image_mode, song_path):
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_slider.osu")

@@ -10,7 +10,7 @@ from save_image import save_image
 from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
-from coord_queue import CoordQueue
+from coord_queue import CoordQueue, infer_to_queue
 from inference import get_model
 import supervision as svi
 
@@ -29,28 +29,6 @@ capture = WindowsCapture(
 def frame_to_numpy(frame: Frame):
     buf = frame.frame_buffer
     return cv2.cvtColor(buf, cv2.COLOR_BGRA2BGR)
-
-def infer_to_queue(results, coord_queue, image_x, image_y):
-    for pred in results.predictions:
-        cls_name = pred.class_name  # or pred.class_name / pred.label depending on your YOLO version
-        conf = pred.confidence  # usually between 0–1
-        x = pred.x
-        y = pred.y
-        # print(conf)
-
-        # 1. Filter by class
-        if cls_name not in {"circle", "slider_head"}:
-            continue
-
-        # 2. Filter by confidence threshold
-        if conf < MIN_CONFIDENCE:
-            continue
-
-        # 3. Convert coordinates
-        x, y = ai_to_screen(x, y, image_x, image_y)
-
-        # 4. Add to queue
-        coord_queue.add(x, y, cls_name)
 
 @capture.event
 def on_frame_arrived(frame: Frame, capture_control: InternalCaptureControl):
