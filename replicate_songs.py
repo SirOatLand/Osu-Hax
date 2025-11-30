@@ -45,7 +45,9 @@ def create_osu_objects(ai_data):
 
     return object
 
-def make_song_queue(coord_queue: CoordQueue):
+def add_song_queue(coord_queue: CoordQueue, model, screenshot, now_t):
+    if screenshot is None:
+        return
     results = model.infer(screenshot)
     clean = [
                 {
@@ -117,7 +119,7 @@ if __name__ == '__main__':
 
             now_t = time.perf_counter() - initial_timestamp
 
-            make_song_queue(object_queue)
+            add_song_queue(object_queue)
             
         # ============= FPS Counter =============
         key = cv2.waitKey(1)
