@@ -73,17 +73,18 @@ def osu_to_screen(osu_x, osu_y):
 
     return screen_x, screen_y
 
-def ai_to_screen(ai_x, ai_y, image_w, image_h):
+def ai_to_screen(ai_x, ai_y, image_width, image_height):
     osu_left, osu_top, osu_w, osu_h = get_osu_client_rect()
 
-    # scale factor from AI image → osu window
-    scale_x = osu_w / image_w
-    scale_y = osu_h / image_h
+    left, top, right, bottom = get_osu_client_rect()
+    osu_width = right - left
+    osu_height = bottom - top
 
-    screen_x = int(osu_left + ai_x * scale_x)
-    screen_y = int(osu_top  + ai_y * scale_y)
+    # scale from screenshot → osu window
+    screen_x = left + (ai_x / image_width) * osu_width
+    screen_y = top + (ai_y / image_height) * osu_height
 
-    return screen_x, screen_y
+    return int(screen_x), int(screen_y)
 
 
 def wait_for_title_change(timeout=5):
