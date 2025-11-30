@@ -54,7 +54,7 @@ def main(save_image_mode, song_path):
     pyautogui.mouseDown()
     pyautogui.mouseUp()
 
-    wait_for_title_change()
+    wait_for_title_change(timeout=10)
     while True:
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
@@ -66,7 +66,7 @@ def main(save_image_mode, song_path):
             pass
 
     initial_timestamp = time.perf_counter()
-    while True:
+    while osu_index < len(osu_objects):
         loop_start = time.time()
         if latest_frame is not None:
             screenshot = frame_to_numpy(latest_frame)
@@ -116,9 +116,9 @@ def main(save_image_mode, song_path):
 
         # ============= Exit =============
         if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
-            # cv2.destroyAllWindows()
+            cv2.destroyAllWindows()
             break
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_oat.osu")
+    main(save_image_mode=False, song_path="./test_songs/thai.osu")

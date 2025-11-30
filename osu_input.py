@@ -5,7 +5,7 @@ from read_map import *
 import time
 import win32gui
 import math
-from slidercalculation import bezier_point, sample_curve, point_at_progress, sample_polyline
+from slidercalculation import bezier_point, sample_curve, point_at_progress, sample_polyline, scale_samples_to_length
 
 global screen_w, screen_h
 screen_w, screen_h = pyautogui.size()
@@ -125,7 +125,8 @@ class SliderAction:
         # --- B-type: sample full bezier ---
         if obj.curveType == "B":
             eval_fn = lambda t: bezier_point(cp, t)
-            self.samples, self.dists = sample_curve(eval_fn, n=300)
+            samples, dists = sample_curve(eval_fn, n=300)
+            self.samples, self.dists = scale_samples_to_length(samples, dists, obj.length)
             return
 
         print("Unsupported curve type:", obj.curveType)
@@ -185,7 +186,7 @@ class SpinnerAction:
 
         set_cursor(sx, sy)
         mouse_leftdown()
-        self.angle += 0.35
+        self.angle += 1.0
 
 
     
