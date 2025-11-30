@@ -72,7 +72,7 @@ def main(save_image_mode, song_path):
     capture.start_free_threaded()
     screenshot = None
 
-    osu_objects, timing_points, slider_multiplier, time_delay_300 = prep_osu_objects(song_path)
+    osu_objects, timing_points, slider_multiplier, time_delay_300, AR_delay = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
 
