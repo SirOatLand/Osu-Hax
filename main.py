@@ -3,13 +3,16 @@ import cv2
 import numpy as np
 import pyautogui
 import math
-
 from windows_capture import WindowsCapture, Frame, InternalCaptureControl
+from inference import get_model
+
 from imgdiff import detect_imgdiff
 from save_image import save_image
 from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
+from replicate_songs import add_song_queue, queue_to_file
+from coord_queue import CoordQueue
 
 latest_frame = None
 current_action = None
@@ -35,26 +38,40 @@ def on_closed():
     print("Capture Session Closed")
     cv2.destroyAllWindows()
 
-def main(save_image_mode, song_path):
+def main(save_image_mode, replicate, song_path):
     global start_time
     global osu_index
     global current_action
     global timing_points
     global slider_multiplier
 
+    # Start thread for capturing screenshots
     capture.start_free_threaded()
     screenshot = None
-
+    
+    # Prepare HitObjects list
     osu_objects, timing_points, slider_multiplier, time_delay_300 = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
 
+    # Initialize coord queue
+    if replicate:
+        model = get_model(
+        model_id="osu-project-2-don-t-delete-ey2bp/2",
+        api_key="n9ZqQYFxrPZCCverE0Lh"
+        )
+        object_queue = CoordQueue(threshold_t=1200)
+
+    # Click start on osu screen
     osu_start_x, osu_start_y  = osu_to_screen(320, 170)
     pyautogui.moveTo(osu_start_x, osu_start_y)
     pyautogui.mouseDown()
     pyautogui.mouseUp()
 
+    # osu changes process name on start
     wait_for_title_change(timeout=10)
+
+    # Manually start the first object with shift + leftclick to sync the script
     while True:
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
@@ -66,6 +83,9 @@ def main(save_image_mode, song_path):
             pass
 
     initial_timestamp = time.perf_counter()
+
+
+    # Main Loop Starts
     while osu_index < len(osu_objects):
         loop_start = time.time()
         if latest_frame is not None:
@@ -86,9 +106,9 @@ def main(save_image_mode, song_path):
         now_t = time.perf_counter() + start_time - initial_timestamp
         obj = osu_objects[osu_index]
         if current_action is None:
-            print(
-                f"OBJ={obj}, curr_time={now_t:.5f}, time={(obj.time/1000):.5f}, index={osu_index}",
-            )
+            # print(
+            #     f"OBJ={obj}, curr_time={now_t:.5f}, time={(obj.time/1000):.5f}, index={osu_index}",
+            # )
             pass
             if now_t >= (obj.time / 1000):
                 if isinstance(obj, HitCircle):
@@ -105,6 +125,11 @@ def main(save_image_mode, song_path):
             if current_action.done:
                 current_action = None
                 osu_index += 1
+
+
+        # ============= Song Replication =============
+        if replicate:
+            add_song_queue(object_queue, model, screenshot, now_t)
         
         # ============= FPS Counter =============
         key = cv2.waitKey(1)
@@ -118,7 +143,10 @@ def main(save_image_mode, song_path):
         if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
             cv2.destroyAllWindows()
             break
+    if replicate:
+        queue_to_file(object_queue)
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/thai.osu")
+    song_name = "cin_normal.osu"
+    main(save_image_mode=False, replicate=True, song_path="./test_songs/" + song_name)
