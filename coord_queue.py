@@ -54,7 +54,7 @@ class DataAI:
         return osu_x, osu_y
 
 class CoordQueue:
-    def __init__(self, threshold_dist=25, threshold_t=300,  cooldown_time=0.2):
+    def __init__(self, threshold_dist=25, threshold_t=1200,  cooldown_time=0.2):
         self.queue = deque()
         self.threshold_dist = threshold_dist
         self.threshold_t = threshold_t
