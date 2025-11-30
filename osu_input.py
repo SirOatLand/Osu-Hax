@@ -73,6 +73,18 @@ def osu_to_screen(osu_x, osu_y):
 
     return screen_x, screen_y
 
+def ai_to_screen(ai_x, ai_y, image_w, image_h):
+    osu_left, osu_top, osu_w, osu_h = get_osu_client_rect()
+
+    # scale factor from AI image → osu window
+    scale_x = osu_w / image_w
+    scale_y = osu_h / image_h
+
+    screen_x = int(osu_left + ai_x * scale_x)
+    screen_y = int(osu_top  + ai_y * scale_y)
+
+    return screen_x, screen_y
+
 
 def wait_for_title_change(timeout=5):
     hwnd = find_osu_window()
@@ -94,25 +106,30 @@ def wait_for_title_change(timeout=5):
     return None
 
 class CircleAction:
-    def __init__(self, obj):
+    def __init__(self, obj, x, y):
         self.obj = obj
         self.done = False
         self.type = 1
+        self.ai_x = x
+        self.ai_y = y
 
     def update(self, t):
         if not self.done:
-            x, y = osu_to_screen(self.obj.x, self.obj.y)
+            # x, y = osu_to_screen(self.obj.x, self.obj.y)
+            x, y = (self.ai_x, self.ai_y)
             set_cursor(x, y)
             mouse_leftdown()
             mouse_leftup()
             self.done = True
     
 class SliderAction:
-    def __init__(self, obj):
+    def __init__(self, obj, x, y):
         self.obj = obj
         self.done = False
         self.type = 2
         self.endTime = obj.time + obj.duration_ms
+        self.ai_x = x
+        self.ai_y = y
 
         # --- Build full curve control points ---
         cp = [(obj.x, obj.y)] + obj.points
