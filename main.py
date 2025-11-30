@@ -17,8 +17,6 @@ import supervision as svi
 latest_frame = None
 current_action = None
 
-MIN_CONFIDENCE = 0.8
-
 capture = WindowsCapture(
     cursor_capture=None,
     draw_border=None,
@@ -29,28 +27,6 @@ capture = WindowsCapture(
 def frame_to_numpy(frame: Frame):
     buf = frame.frame_buffer
     return cv2.cvtColor(buf, cv2.COLOR_BGRA2BGR)
-
-def infer_to_queue(results, coord_queue, image_x, image_y):
-    for pred in results.predictions:
-        cls_name = pred.class_name  # or pred.class_name / pred.label depending on your YOLO version
-        conf = pred.confidence  # usually between 0–1
-        x = pred.x
-        y = pred.y
-        # print(conf)
-
-        # 1. Filter by class
-        if cls_name not in {"circle", "slider_head"}:
-            continue
-
-        # 2. Filter by confidence threshold
-        if conf < MIN_CONFIDENCE:
-            continue
-
-        # 3. Convert coordinates
-        x, y = ai_to_screen(x, y, image_x, image_y)
-
-        # 4. Add to queue
-        coord_queue.add(x, y, cls_name)
 
 @capture.event
 def on_frame_arrived(frame: Frame, capture_control: InternalCaptureControl):
@@ -87,7 +63,7 @@ def main(save_image_mode, song_path):
     )
     coord_queue = CoordQueue(threshold=25, cooldown_time=0.1)
 
-    wait_for_title_change()
+    wait_for_title_change(timeout=10)
     while True:
         if latest_frame is not None:  # Keeping inferring before the game starts
             screenshot = frame_to_numpy(latest_frame)
@@ -102,7 +78,7 @@ def main(save_image_mode, song_path):
             pass
 
     initial_timestamp = time.perf_counter()
-    while True:
+    while osu_index < len(osu_objects):
         loop_start = time.time()
         if latest_frame is not None:
             screenshot = frame_to_numpy(latest_frame)
@@ -174,9 +150,9 @@ def main(save_image_mode, song_path):
 
         # ============= Exit =============
         if key == ord('q') or (ctypes.windll.user32.GetAsyncKeyState(0x51) & 0x0001):
-            # cv2.destroyAllWindows()
+            cv2.destroyAllWindows()
             break
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=True, song_path="./test_songs/cin_normal.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_oat.osu")
