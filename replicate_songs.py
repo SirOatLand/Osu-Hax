@@ -45,6 +45,34 @@ def create_osu_objects(ai_data):
 
     return object
 
+def make_song_queue(coord_queue: CoordQueue):
+    results = model.infer(screenshot)
+    clean = [
+                {
+                    "class": p.class_name,
+                    "confidence": float(p.confidence),
+                    "x": float(p.x),
+                    "y": float(p.y),
+                    "width": float(p.width),
+                    "height": float(p.height),
+                    "time_ms": round(now_t * 1000),
+                    "screen_x": int(screenshot.shape[1]),
+                    "screen_y": int(screenshot.shape[0])
+                }
+                for p in results[0].predictions
+            ]
+    for item in clean:
+        data_ai = DataAI(item)
+        coord_queue.add(data_ai)
+
+def queue_to_file(coord_queue: CoordQueue, song_folder="./replicated_songs/", song_name="test1"):
+    print("Making .osu file......")
+    osu_objects = []
+    for data_ai in coord_queue.queue:
+        osu_objects.append(create_osu_objects(data_ai))
+    make_osu_file(song_folder, song_name, osu_objects)
+    print("Done!")
+
 if __name__ == '__main__':
     import time
     import cv2
@@ -88,25 +116,8 @@ if __name__ == '__main__':
             screenshot = frame_to_numpy(latest_frame)
 
             now_t = time.perf_counter() - initial_timestamp
-            results = model.infer(screenshot)
-            clean = [
-                        {
-                            "class": p.class_name,
-                            "confidence": float(p.confidence),
-                            "x": float(p.x),
-                            "y": float(p.y),
-                            "width": float(p.width),
-                            "height": float(p.height),
-                            "time_ms": round(now_t * 1000),
-                            "screen_x": int(screenshot.shape[1]),
-                            "screen_y": int(screenshot.shape[0])
-                        }
-                        for p in results[0].predictions
-                    ]
-            for item in clean:
-                data_ai = DataAI(item)
-                object_queue.add(data_ai)
-            # cv2.imshow("Fake Osu", screenshot)
+
+            make_song_queue(object_queue)
             
         # ============= FPS Counter =============
         key = cv2.waitKey(1)
@@ -122,9 +133,4 @@ if __name__ == '__main__':
             break
 
         
-    print("Making .osu file......")
-    osu_objects = []
-    for data_ai in object_queue.queue:
-        osu_objects.append(create_osu_objects(data_ai))
-    make_osu_file("./replicated_songs/", "test1", osu_objects)
-    print("Done!")
+    queue_to_file(object_queue)
