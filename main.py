@@ -63,6 +63,7 @@ def main(save_image_mode, song_path):
     )
     coord_queue = CoordQueue(threshold=25, cooldown_time=0.1)
 
+    wait_for_title_change()
     wait_for_title_change(timeout=10)
     while True:
         if latest_frame is not None:  # Keeping inferring before the game starts
@@ -104,15 +105,15 @@ def main(save_image_mode, song_path):
         bounding_box_annotator = svi.BoxAnnotator()
         label_annotator = svi.LabelAnnotator()
 
-        # annotate the image with our inference results
-        annotated_image = bounding_box_annotator.annotate(scene=screenshot, detections=detections)
-        annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections)
-        screenshot = annotated_image
+            # annotate the image with our inference results
+            annotated_image = bounding_box_annotator.annotate(scene=screenshot, detections=detections)
+            annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections)
+            screenshot = annotated_image
 
-        if save_image_mode:
-            save_image(screenshot, folder_names=['image_dump'], img_count=1000, delay=0.2)
-            cv2.imshow("Detected Osu", screenshot)
-        # cv2.imshow("Detected Osu", screenshot)
+            if save_image_mode:
+                save_image(screenshot, folder_names=['image_dump'], img_count=1000, delay=0.2)
+                cv2.imshow("Detected Osu", screenshot)
+            # cv2.imshow("Detected Osu", screenshot)
 
         # ============= Osu Input =============
         now_t = time.perf_counter() + start_time - initial_timestamp
@@ -155,4 +156,4 @@ def main(save_image_mode, song_path):
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_oat.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")

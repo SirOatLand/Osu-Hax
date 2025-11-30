@@ -74,6 +74,15 @@ class CoordQueue:
 
         return (250, 250, 'none')
 
+    def peek(self, cls):
+        for (qx, qy, qcls) in self.queue:
+            if qcls == cls:
+                # return without modifying queue
+                return (qx, qy, qcls)
+
+        # Same behavior as your pop() fallback
+        return (250, 250, 'none')
+
     # -------------------------------
     # Manual removal (optional)
     # -------------------------------
