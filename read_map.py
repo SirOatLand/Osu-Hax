@@ -288,7 +288,7 @@ def prep_osu_objects(filepath):
     # Get Slider timing (duration + end_time)
     hitobjects = compute_slider_timings(hitobjects, timing_points, slider_multiplier)
 
-    return hitobjects, timing_points, slider_multiplier, time_delay_300 
+    return hitobjects, timing_points, slider_multiplier, time_delay_300, AR_delay
 
 if __name__ == "__main__":
     osu_objects = read_osu_file('./test_songs/cin1.osu')

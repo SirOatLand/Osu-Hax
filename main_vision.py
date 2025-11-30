@@ -54,8 +54,9 @@ def infer_to_queue(results, coord_queue, image_x, image_y):
         # 4. Add to queue
         coord_queue.add(x, y, cls_name)
 
-def infer_to_coords(results, image_x, image_y):
-    coords = []
+
+def infer_to_queue(results, coord_queue, image_x, image_y, ar_delay):
+    now = time.perf_counter()  # current timestamp for detection
 
     for pred in results.predictions:
         cls_name = pred.class_name
@@ -63,21 +64,19 @@ def infer_to_coords(results, image_x, image_y):
         x = pred.x
         y = pred.y
 
-        # 1. Only keep desired classes
+        # 1. Filter by class
         if cls_name not in {"circle", "slider_head"}:
             continue
 
-        # 2. Confidence filter
+        # 2. Filter by confidence threshold
         if conf < MIN_CONFIDENCE:
             continue
 
-        # 3. Convert coordinates to screen coords
-        sx, sy = ai_to_screen(x, y, image_x, image_y)
+        # 3. Convert coordinates to screen space
+        x, y = ai_to_screen(x, y, image_x, image_y)
 
-        # 4. Append coord object
-        coords.append((sx, sy, cls_name))
-
-    return coords
+        # 4. Add to queue with timestamp and ar_delay
+        coord_queue.add(x, y, cls_name, time_detected=now, ar_delay=ar_delay)
 
 
 def find_disappeared_coords(old_list, new_list, thresh=30):
@@ -116,7 +115,7 @@ def main(save_image_mode, song_path):
     capture.start_free_threaded()
     screenshot = None
 
-    osu_objects, timing_points, slider_multiplier, time_delay_300 = prep_osu_objects(song_path)
+    osu_objects, timing_points, slider_multiplier, time_delay_300, AR_delay = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
 
