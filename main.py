@@ -10,9 +10,14 @@ from save_image import save_image
 from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
+from coord_queue import CoordQueue
+from inference import get_model
+import supervision as svi
 
 latest_frame = None
 current_action = None
+
+MIN_CONFIDENCE = 0.9
 
 capture = WindowsCapture(
     cursor_capture=None,
@@ -24,6 +29,28 @@ capture = WindowsCapture(
 def frame_to_numpy(frame: Frame):
     buf = frame.frame_buffer
     return cv2.cvtColor(buf, cv2.COLOR_BGRA2BGR)
+
+def infer_to_queue(results, coord_queue, image_x, image_y):
+    for pred in results.predictions:
+        cls_name = pred.class_name  # or pred.class_name / pred.label depending on your YOLO version
+        conf = pred.confidence  # usually between 0–1
+        x = pred.x
+        y = pred.y
+        # print(conf)
+
+        # 1. Filter by class
+        if cls_name not in {"circle", "slider_head"}:
+            continue
+
+        # 2. Filter by confidence threshold
+        if conf < MIN_CONFIDENCE:
+            continue
+
+        # 3. Convert coordinates
+        x, y = ai_to_screen(x, y, image_x, image_y)
+
+        # 4. Add to queue
+        coord_queue.add(x, y, cls_name)
 
 @capture.event
 def on_frame_arrived(frame: Frame, capture_control: InternalCaptureControl):
@@ -54,8 +81,17 @@ def main(save_image_mode, song_path):
     pyautogui.mouseDown()
     pyautogui.mouseUp()
 
+    model = get_model(
+        model_id="osu-project-2-9xzrs/2",
+        api_key="n9ZqQYFxrPZCCverE0Lh"
+    )
+    coord_queue = CoordQueue(threshold=25)
+
     wait_for_title_change()
     while True:
+        if latest_frame is not None:  # Keeping inferring before the game starts
+            screenshot = frame_to_numpy(latest_frame)
+            infer_to_queue(model.infer(screenshot)[0], coord_queue, screenshot.shape[1], screenshot.shape[0])
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
         if left_click & shift_pressed:
@@ -78,9 +114,26 @@ def main(save_image_mode, song_path):
 
             # ============= Normal Capture =============
             else:
-                cv2.imshow("Fake Osu", screenshot)
+                # cv2.imshow("Fake Osu", screenshot)
                 pass
+        # ============= Model Inference =============
+        results = model.infer(screenshot)[0]
+        infer_to_queue(results, coord_queue, screenshot.shape[1], screenshot.shape[0])
 
+        # load the results into the supervision Detections api
+        detections = svi.Detections.from_inference(results)
+        results = []  # clear the result
+
+        # create supervision annotators
+        bounding_box_annotator = svi.BoxAnnotator()
+        label_annotator = svi.LabelAnnotator()
+
+        # annotate the image with our inference results
+        annotated_image = bounding_box_annotator.annotate(scene=screenshot, detections=detections)
+        annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections)
+        screenshot = annotated_image
+
+        cv2.imshow("Detected Osu", screenshot)
 
         # ============= Osu Input =============
         now_t = time.perf_counter() + start_time - initial_timestamp
@@ -92,10 +145,12 @@ def main(save_image_mode, song_path):
             pass
             if now_t >= (obj.time / 1000):
                 if isinstance(obj, HitCircle):
-                    current_action = CircleAction(obj)
+                    click_x, click_y, q_class = coord_queue.pop("circle")
+                    current_action = CircleAction(obj, click_x, click_y)
 
                 elif isinstance(obj, Slider):
-                    current_action = SliderAction(obj)
+                    click_x, click_y, q_class = coord_queue.pop("slider_head")
+                    current_action = SliderAction(obj, click_x, click_y)
 
                 elif isinstance(obj, Spinner):
                     current_action = SpinnerAction(obj)
@@ -121,4 +176,4 @@ def main(save_image_mode, song_path):
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_oat.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")
