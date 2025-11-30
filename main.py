@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import pyautogui
 import math
+
 from windows_capture import WindowsCapture, Frame, InternalCaptureControl
 from inference import get_model
 
@@ -12,7 +13,7 @@ from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
 from replicate_songs import add_song_queue, queue_to_file
-from coord_queue import CoordQueue
+from coord_queue import CoordQueue, infer_to_queue
 
 latest_frame = None
 current_action = None
@@ -75,9 +76,9 @@ def main(save_image_mode, replicate, song_path):
 
     # Manually start the first object with shift + leftclick to sync the script
     while True:
-        if latest_frame is not None:  # Keeping inferring before the game starts
-            screenshot = frame_to_numpy(latest_frame)
-            infer_to_queue(model.infer(screenshot)[0], coord_queue, screenshot.shape[1], screenshot.shape[0])
+        # if latest_frame is not None:  # Keeping inferring before the game starts
+        #     screenshot = frame_to_numpy(latest_frame)
+        #     infer_to_queue(model.infer(screenshot), coord_queue, screenshot, time.perf_counter()*1000)
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
         if left_click & shift_pressed:
@@ -88,7 +89,6 @@ def main(save_image_mode, replicate, song_path):
             pass
 
     initial_timestamp = time.perf_counter()
-
 
     # Main Loop Starts
     while osu_index < len(osu_objects):

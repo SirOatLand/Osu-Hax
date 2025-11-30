@@ -59,7 +59,7 @@ def main(save_image_mode, song_path):
     osu_objects, timing_points, slider_multiplier, time_delay_300, AR_delay = prep_osu_objects(song_path)
     osu_index = 0
     current_action = None
-    AR_delay = AR_delay/1000 - AR_DELAY_OFFSET
+    AR_delay = AR_delay - AR_DELAY_OFFSET
 
     osu_start_x, osu_start_y = osu_to_screen(320, 170)
     pyautogui.moveTo(osu_start_x, osu_start_y)
@@ -70,13 +70,13 @@ def main(save_image_mode, song_path):
         model_id="osu-project-2-9xzrs/2",
         api_key="n9ZqQYFxrPZCCverE0Lh"
     )
-    coord_queue = CoordQueue(threshold=OBJ_THRESHOLD, cooldown_time=OBJ_COOLDOWN, min_detect_count=OBJ_MIN_COUNT)
-    wait_for_title_change()
+    coord_queue = CoordQueue(threshold_dist=OBJ_THRESHOLD, cooldown_time=OBJ_COOLDOWN, min_detect_count=OBJ_MIN_COUNT, threshold_t=0)
+
     wait_for_title_change(timeout=10)
     while True:
         if latest_frame is not None:  # Keeping inferring before the game starts
             screenshot = frame_to_numpy(latest_frame)
-            infer_to_queue(model.infer(screenshot)[0], coord_queue, screenshot.shape[1], screenshot.shape[0])
+            infer_to_queue(model.infer(screenshot), coord_queue, screenshot, time.perf_counter()*1000)
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
         if left_click & shift_pressed:
@@ -88,58 +88,52 @@ def main(save_image_mode, song_path):
 
     initial_timestamp = time.perf_counter()
 
-
-
     while osu_index < len(osu_objects):
+        # now_t = time.perf_counter() + start_time - initial_timestamp
         loop_start = time.time()
         # ========== FRAME PROCESSING ==========
         if latest_frame is not None:
             screenshot = frame_to_numpy(latest_frame)
-            results = model.infer(screenshot)[0]
-            infer_to_queue(results, coord_queue, screenshot.shape[1], screenshot.shape[0])
+            results = model.infer(screenshot)
+            infer_to_queue(results, coord_queue, screenshot, time.perf_counter()*1000)
             results = None
-
-        now = time.perf_counter()
         ready_to_process = []
 
         # Iterate through the queue without removing items
-        for item in coord_queue.queue:
-            x, y, cls, time_detected = item
-            # print(now, time_detected, AR_delay, now - time_detected)
-            if now - time_detected >= AR_delay:
-                ready_to_process.append(item)
+        for coord in coord_queue.queue:
+            # print(now_t, time_detected, AR_delay, now - time_detected)
+            if (time.perf_counter()*1000) - coord.time_ms >= AR_delay:
+                ready_to_process.append(coord)
 
-        action = None
-        for (dx, dy, dcls, ntime) in ready_to_process:
-            # print(f"To process: {dx, dy, dcls, ntime}")
-            # Remove from queue (non-class-based removal)
-            # coord_queue.remove(dx, dy, dcls, ntime)
+        if current_action is None and ready_to_process:
+            coord = ready_to_process.pop(0)
 
             # ========== 2. MATCH TO NEXT OSU OBJECT ==========
             while osu_index < len(osu_objects) and current_action is None:
                 obj = osu_objects[osu_index]
                 print(f"Obtained object is {obj}")
                 # Match based on expected class logic
-                if isinstance(obj, HitCircle) and dcls == "circle":
-                    action = CircleAction(obj, dx, dy)
-                    coord_queue.remove(dx, dy, dcls, ntime)
+                if isinstance(obj, HitCircle) and coord.cls == "circle":
+                    x, y = ai_to_screen(coord.x, coord.y, coord.screen_x, coord.screen_y)
+                    current_action = CircleAction(obj, x, y)
+                    coord_queue.remove(coord)
                     break
 
-                now = time.perf_counter() + start_time - initial_timestamp
-                print(f"Now is {now}")
+                now_t = time.perf_counter() + start_time - initial_timestamp
+                # print(f"now_t is {now_t}")
                 if isinstance(obj, Slider):
-                    print(f"Now is {now}, waiting for {obj.time/1000}.")
-                    if now >= (obj.time / 1000):
-                        print("Condition passed")
-                        action = SliderAction(obj)
-                        coord_queue.remove(dx, dy, dcls, ntime)
+                    print(f"Now is {now_t}, waiting for {obj.time/1000}.")
+                    if now_t >= (obj.time / 1000):
+#                         print("Condition passed")
+                        current_action = SliderAction(obj)
+                        coord_queue.remove(coord)
                         break
-                    print("Condition not passed")
+#                     print("Condition not passed")
 
                 elif isinstance(obj, Spinner):
-                    if now >= (obj.time / 1000):
-                        action = SpinnerAction(obj)
-                        coord_queue.remove(dx, dy, dcls, ntime)
+                    if now_t >= (obj.time / 1000):
+                        current_action = SpinnerAction(obj)
+                        coord_queue.remove(coord)
                         break
 
                 else:
@@ -151,27 +145,24 @@ def main(save_image_mode, song_path):
                             skip_steps = i-osu_index
                             break
                     if obj_close:
-                        print(f"Skipping from {obj} to {dcls}. Step is {skip_steps}")
+                        print(f"Skipping from {obj} to {coord.cls}. Step is {skip_steps}")
                         osu_index += skip_steps
                     else:
-                        coord_queue.remove(dx, dy, dcls, ntime)
+                        coord_queue.remove(coord)
                         break
             # print(f"End of class {dcls}")
         # print(f"Process length: {len(ready_to_process)}")
         # for item in ready_to_process:
         #     coord_queue.remove(*item)
         # ========== 3. CREATE ACTION FOR MATCHED OBJECT ==========
-        current_action = action
-        # print(f"Current action is {action}")
-
-
+        # print(f"Current action is {current_action}")
         # ========== 4. UPDATE ONGOING ACTION ==========
         if current_action is not None:
             # print(f"Doing action {action}")
             now_t = time.perf_counter() + start_time - initial_timestamp
             current_action.update(now_t)
             if current_action.done:
-                print("Action done")
+                # print("Action done")
                 current_action = None
                 osu_index += 1
 

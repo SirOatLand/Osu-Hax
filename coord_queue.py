@@ -15,26 +15,29 @@ def ai_to_screen(ai_x, ai_y, image_width, image_height):
     screen_y = top + (ai_y / image_height) * osu_height
     return int(screen_x), int(screen_y)
 
-def infer_to_queue(results, coord_queue, image_x, image_y):
-    for pred in results.predictions:
-        cls_name = pred.class_name
-        conf = pred.confidence
-        x = pred.x
-        y = pred.y
-        
-    # 1. Filter by class
-    if cls_name not in {"circle", "slider_head"}:
-        continue
 
-    # 2. Filter by confidence threshold
-    if conf < OBJ_MIN_CONFIDENCE:
-        continue
-
-    # 3. Convert coordinates to screen space
-    x, y = ai_to_screen(x, y, image_x, image_y)
-
-    # 4. Add to queue with timestamp and ar_delay
-    coord_queue.add(x, y, cls_name)
+def infer_to_queue(results, coord_queue, screenshot, now_t):
+    clean = [
+        {
+            "class": p.class_name,
+            "confidence": float(p.confidence),
+            "x": float(p.x),
+            "y": float(p.y),
+            "width": float(p.width),
+            "height": float(p.height),
+            "time_ms": round(now_t),
+            "screen_x": int(screenshot.shape[1]),
+            "screen_y": int(screenshot.shape[0])
+        }
+        for p in results[0].predictions
+    ]
+    for item in clean:
+        if item['class'] not in {"circle", "slider_head"}:
+            continue
+        if item['confidence'] < OBJ_MIN_CONFIDENCE:
+            continue
+        data_ai = DataAI(item)
+        coord_queue.add(data_ai)
 
 def screen_to_osu(screen_x, screen_y):
     # Get CLIENT RECT
@@ -59,18 +62,19 @@ def screen_to_osu(screen_x, screen_y):
 
     return int(osu_x), int(osu_y)
 
-def find_disappeared_coords(old_list, new_list, thresh=30):
-    disappeared = []
-    for (ox, oy, ocls) in old_list:
-        found = False
-        for (nx, ny, ncls) in new_list:
-            # same class AND close coordinate → still present
-            if ncls == ocls and math.hypot(nx - ox, ny - oy) <= thresh:
-                found = True
-                break
-        if not found:
-            disappeared.append((ox, oy, ocls))
-    return disappeared
+# def find_disappeared_coords(old_list, new_list, thresh=30):
+#     disappeared = []
+#     for (ox, oy, ocls) in old_list:
+#         found = False
+#         for (nx, ny, ncls) in new_list:
+#             # same class AND close coordinate → still present
+#             if ncls == ocls and math.hypot(nx - ox, ny - oy) <= thresh:
+#                 found = True
+#                 break
+#         if not found:
+#             disappeared.append((ox, oy, ocls))
+#     return disappeared
+
 
 class DataAI:
     def __init__(self, obj):
@@ -82,20 +86,20 @@ class DataAI:
         self.width = obj['width']
         self.height = obj['height']
         self.time_ms = obj['time_ms']
-        self.time_pf = time.perf_counter()
 
     def get_osu_coords(self):
         screen_x, screen_y = ai_to_screen(self.x, self.y, self.screen_x, self.screen_y) 
         osu_x, osu_y  = screen_to_osu(screen_x, screen_y) 
         return osu_x, osu_y
-    
+
+
 class CoordQueue:
-    def __init__(self, threshold_dist=25,  cooldown_time=0.2, min_detect_count=5, threshold_t=1200):
-        self.queue = deque()
+    def __init__(self, threshold_dist=25, cooldown_time=0.2, min_detect_count=5, threshold_t=1200):
+        self.queue = []
         self.threshold_dist = threshold_dist
         self.threshold_t = threshold_t
-        self.cooldown_time = cooldown_time   # seconds
-        self.cooldown = []  # list of (x, y, cls, expire_time)
+        self.cooldown_time = cooldown_time  # seconds
+        self.cooldown_coords = []  # list of coords on cooldown
         self.min_detect_count = min_detect_count  # how many frames required
         self.detect_counts = {}  # store repeated detections
 
@@ -116,17 +120,20 @@ class CoordQueue:
     # Remove expired cooldown entries
     # -------------------------------
     def _cleanup_cooldown(self):
-        now = time.time()
-        self.cooldown = [c for c in self.cooldown if c[3] > now]
-
+        now = time.perf_counter()*1000
+        self.cooldown_coords = [
+            (coord, expire)
+            for (coord, expire) in self.cooldown_coords
+            if expire > now
+        ]
     # -------------------------------
     # Check if coord is in cooldown
     # -------------------------------
     def _is_in_cooldown(self, data_ai: DataAI):
-        now = time.time()
+        now = time.perf_counter()*1000
         x, y, cls = data_ai.x, data_ai.y, data_ai.cls
-        for (cx, cy, ccls, expire) in self.cooldown:
-            if ccls == cls and self._same((x, y), (cx, cy)) and expire > now:
+        for (recent_coord, expire) in self.cooldown_coords:
+            if recent_coord.cls == cls and self._same_dist(data_ai, recent_coord) and expire > now:
                 return True
         return False
 
@@ -146,7 +153,9 @@ class CoordQueue:
             if data_ai.cls == cls:
                 if self._same_time(data_ai, data_ai_q):
                     return False
-                
+                if self._same_dist(data_ai, data_ai_q):
+                    return False
+
         # Increment detection count
         key = (x, y, cls)
         if key not in self.detect_counts:
@@ -157,55 +166,56 @@ class CoordQueue:
         # Not enough detections yet → ignore
         if self.detect_counts[key] < self.min_detect_count:
             return False
-        
+
         # 3. Add normally
         self.queue.append(data_ai)
-        print(f"[Queue] Added: ({x}, {y}, {cls}, {time_ms})  size={len(self.queue)}")
+        # print(f"[Queue] Added: ({x}, {y}, {cls}, {time_ms})  size={len(self.queue)}")
         return True
 
     # -------------------------------
     # Pop the next item of given class
     # -------------------------------
-    def pop(self, cls):
-        for i, (qx, qy, qcls, ntime) in enumerate(self.queue):
-            if qcls == cls:
+    # def pop(self, cls):
+    #     for i, (qx, qy, qcls, ntime) in enumerate(self.queue):
+    #         if qcls == cls:
+    #
+    #             # remove all items before + the matched one
+    #             for _ in range(i + 1):
+    #                 removed = self.queue.popleft()
+    #
+    #             # add popped coord to cooldown list
+    #             expire_time = time.time() + self.cooldown_coords_time
+    #             self.cooldown_coords.append((qx, qy, cls, expire_time))
+    #
+    #             print(f"[Queue] Popped: ({qx}, {qy}, {cls})")
+    #             return (qx, qy, cls)
+    #
+    #     return (250, 250, 'none')
 
-                # remove all items before + the matched one
-                for _ in range(i + 1):
-                    removed = self.queue.popleft()
-
-                # add popped coord to cooldown list
-                expire_time = time.time() + self.cooldown_time
-                self.cooldown.append((qx, qy, cls, expire_time))
-
-                print(f"[Queue] Popped: ({qx}, {qy}, {cls})")
-                return (qx, qy, cls)
-
-        return (250, 250, 'none')
-
-    def peek(self, data_ai: DataAI):
-        cls = data_ai.cls
-        for (qx, qy, qcls) in self.queue:
-            if qcls == cls:
-                # return without modifying queue
-                return (qx, qy, qcls)
-
-        # Same behavior as your pop() fallback
-        return (250, 250, 'none')
+    # def peek(self, data_ai: DataAI):
+    #     cls = data_ai.cls
+    #     for (qx, qy, qcls) in self.queue:
+    #         if qcls == cls:
+    #             # return without modifying queue
+    #             return (qx, qy, qcls)
+    #
+    #     # Same behavior as your pop() fallback
+    #     return (250, 250, 'none')
 
     # -------------------------------
     # Manual removal (optional)
     # -------------------------------
-    def remove(self, data_ai):
-        x, y, cls = data_ai.x, data_ai.y, data_ai.cls
-        for i, (qx, qy, qcls) in enumerate(self.queue):
-            if qcls == cls and self._same((x, y), (qx, qy)):
-                removed = self.queue[i]
-                del self.queue[i]
-                # add popped coord to cooldown list
-                expire_time = time.time() + self.cooldown_time
-                self.cooldown.append((qx, qy, cls, expire_time))
-                print(f"[Queue] Force-removed: {removed}")
+    def remove(self, coord):
+        for i, item in enumerate(self.queue):
+            # Match class & distance condition
+            if item.cls == coord.cls and self._same_dist(coord, item):
+                # Pop the item
+                removed = self.queue.pop(i)
+
+                # Add to cooldown with timestamp
+                expire_time = (time.perf_counter()*1000) + (self.cooldown_time*1000)
+                self.cooldown_coords.append((removed, expire_time))
+                # print(f"[Queue] Force-removed: {removed}")
                 return True
         return False
 
@@ -214,4 +224,4 @@ class CoordQueue:
 
     def debug(self):
         print("Queue =", list(self.queue))
-        print("Cooldown =", self.cooldown)
+        print("Cooldown =", self.cooldown_coords)

@@ -6,11 +6,11 @@ MOUSE_RIGHTUP = 0x0010      # right button up
 MOUSE_MIDDLEDOWN = 0x0020   # middle button down
 MOUSE_MIDDLEUP = 0x0040     # middle button up
 
-OBJ_MIN_CONFIDENCE = 0.8
+OBJ_MIN_CONFIDENCE = 0.85
 OBJ_THRESHOLD = 25
 OBJ_COOLDOWN = 0.1
-OBJ_MIN_COUNT = 3
-AR_DELAY_OFFSET = 0.18 # bigger is faster
+OBJ_MIN_COUNT = 2
+AR_DELAY_OFFSET = 200       # in seconds, bigger is faster
 OSU_LOOKAHEAD = 5
 
 if __name__ == "__main__":
