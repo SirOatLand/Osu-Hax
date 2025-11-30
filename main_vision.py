@@ -111,7 +111,7 @@ def main(save_image_mode, song_path):
             # ========== 2. MATCH TO NEXT OSU OBJECT ==========
             while osu_index < len(osu_objects) and current_action is None:
                 obj = osu_objects[osu_index]
-                print(f"Obtained object is {obj}")
+                # print(f"Obtained object is {obj}")
                 # Match based on expected class logic
                 if isinstance(obj, HitCircle) and coord.cls == "circle":
                     x, y = ai_to_screen(coord.x, coord.y, coord.screen_x, coord.screen_y)
@@ -122,7 +122,7 @@ def main(save_image_mode, song_path):
                 now_t = time.perf_counter() + start_time - initial_timestamp
                 # print(f"now_t is {now_t}")
                 if isinstance(obj, Slider):
-                    print(f"Now is {now_t}, waiting for {obj.time/1000}.")
+                    # print(f"Now is {now_t}, waiting for {obj.time/1000}.")
                     if now_t >= (obj.time / 1000):
 #                         print("Condition passed")
                         current_action = SliderAction(obj)
@@ -183,4 +183,4 @@ def main(save_image_mode, song_path):
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_slider.osu")
+    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")
