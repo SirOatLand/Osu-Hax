@@ -17,7 +17,7 @@ import supervision as svi
 latest_frame = None
 current_action = None
 
-MIN_CONFIDENCE = 0.9
+MIN_CONFIDENCE = 0.8
 
 capture = WindowsCapture(
     cursor_capture=None,
@@ -85,7 +85,7 @@ def main(save_image_mode, song_path):
         model_id="osu-project-2-9xzrs/2",
         api_key="n9ZqQYFxrPZCCverE0Lh"
     )
-    coord_queue = CoordQueue(threshold=25)
+    coord_queue = CoordQueue(threshold=25, cooldown_time=0.1)
 
     wait_for_title_change()
     while True:
@@ -106,16 +106,16 @@ def main(save_image_mode, song_path):
         loop_start = time.time()
         if latest_frame is not None:
             screenshot = frame_to_numpy(latest_frame)
-
-            # ============= Save Image Mode =============
-            if save_image_mode:
-                save_image(screenshot, folder_names=['img1', 'img2', 'img3', 'img4'], img_count=250, delay=0.2)
-                cv2.imshow("screenshoting", screenshot)
-
-            # ============= Normal Capture =============
-            else:
-                # cv2.imshow("Fake Osu", screenshot)
-                pass
+        #
+        #     # ============= Save Image Mode =============
+        #     if save_image_mode:
+        #         save_image(screenshot, folder_names=['img1', 'img2', 'img3', 'img4'], img_count=250, delay=0.2)
+        #         cv2.imshow("screenshoting", screenshot)
+        #
+        #     # ============= Normal Capture =============
+        #     else:
+        #         # cv2.imshow("Fake Osu", screenshot)
+        #         pass
         # ============= Model Inference =============
         results = model.infer(screenshot)[0]
         infer_to_queue(results, coord_queue, screenshot.shape[1], screenshot.shape[0])
@@ -133,7 +133,10 @@ def main(save_image_mode, song_path):
         annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections)
         screenshot = annotated_image
 
-        cv2.imshow("Detected Osu", screenshot)
+        if save_image_mode:
+            save_image(screenshot, folder_names=['image_dump'], img_count=1000, delay=0.2)
+            cv2.imshow("Detected Osu", screenshot)
+        # cv2.imshow("Detected Osu", screenshot)
 
         # ============= Osu Input =============
         now_t = time.perf_counter() + start_time - initial_timestamp
@@ -176,4 +179,4 @@ def main(save_image_mode, song_path):
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
-    main(save_image_mode=False, song_path="./test_songs/cin_normal.osu")
+    main(save_image_mode=True, song_path="./test_songs/cin_normal.osu")
