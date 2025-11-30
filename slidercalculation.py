@@ -67,6 +67,23 @@ def sample_curve(eval_fn, n=250):
         dists.append(dists[-1] + math.hypot(dx, dy))
     return pts, dists
 
+def scale_samples_to_length(samples, dists, target_length):
+    total = dists[-1]
+    if total <= 0 or target_length <= 0:
+        return samples, dists  # nothing to do
+
+    scale = target_length / total
+    # translate relative to first sample, scale vector, then shift back
+    x0, y0 = samples[0]
+    scaled = []
+    for (x, y) in samples:
+        vx = x - x0
+        vy = y - y0
+        scaled.append((x0 + vx * scale, y0 + vy * scale))
+    # scaled dists = old dists * scale
+    scaled_dists = [d * scale for d in dists]
+    return scaled, scaled_dists
+
 def point_at_progress(pts, dists, p):
     target = dists[-1] * p
     i = bisect.bisect_left(dists, target)
@@ -99,7 +116,8 @@ class SliderAction:
         # --- B-type: sample full bezier ---
         if obj.curveType == "B":
             eval_fn = lambda t: bezier_point(cp, t)
-            self.samples, self.dists = sample_curve(eval_fn, n=300)
+            samples, dists = sample_curve(eval_fn, n=300)
+            self.samples, self.dists = scale_samples_to_length(samples, dists, obj.length)
             return
 
         print("Unsupported curve type:", obj.curveType)
@@ -135,9 +153,6 @@ class SliderAction:
             # mouse_leftup()
             self.done = True
 
-    def changedone(self):
-        self.done = False
-
 if __name__ == "__main__":
      
     from read_map import Slider, compute_slider_timings
@@ -149,7 +164,7 @@ if __name__ == "__main__":
     #         length=192.0, edgeSounds=[], edgeSets=[], extras='', 
     #         duration_ms=499.991753436068, end_time=69029)
     
-    parts="288,64,160027,6,0,L|352:64|352:224,2,192,2|8|2"
+    parts="87,207,10000,2,0,B|510:3|510:3|508:3|507:3,5,260"
 
     parts = parts.split(",")
 
