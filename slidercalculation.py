@@ -97,65 +97,10 @@ def point_at_progress(pts, dists, p):
     y = pts[i-1][1] + (pts[i][1] - pts[i-1][1]) * frac
     return x, y
 
-
-class SliderAction:
-    def __init__(self, obj):
-        self.obj = obj
-        self.done = False
-        self.type = 2
-        self.endTime = obj.time + obj.duration_ms
-
-        # --- Build full curve control points ---
-        cp = [(obj.x, obj.y)] + obj.points
-
-        # --- L-type: simple lerp between endpoints ---
-        if obj.curveType == "L":
-            self.samples, self.dists = sample_polyline(cp, n_per_segment=12)
-            return
-
-        # --- B-type: sample full bezier ---
-        if obj.curveType == "B":
-            eval_fn = lambda t: bezier_point(cp, t)
-            samples, dists = sample_curve(eval_fn, n=300)
-            self.samples, self.dists = scale_samples_to_length(samples, dists, obj.length)
-            return
-
-        print("Unsupported curve type:", obj.curveType)
-
-    def update(self, t):
-        if self.done:
-            return
-
-        start_t = self.obj.time / 1000
-        end_t = self.endTime / 1000
-
-        # raw slider progress
-        progress_raw = (t - start_t) / (end_t - start_t)
-        progress_raw = max(0, min(progress_raw, 1))
-
-        # slidebacks
-        total = progress_raw * self.obj.slides
-        slide_index = int(total)
-        slide_pos = total - slide_index
-
-        if slide_index % 2 == 0:
-            progress = slide_pos
-        else:
-            progress = 1 - slide_pos
-
-        # get arc-length-correct point
-        px, py = point_at_progress(self.samples, self.dists, progress)
-
-        sx, sy = osu_to_screen(px, py)
-        set_cursor(sx, sy)
-        # mouse_leftdown()
-        if progress_raw  >= 1:
-            # mouse_leftup()
-            self.done = True
-
 if __name__ == "__main__":
      
-    from read_map import Slider, compute_slider_timings
+    from read_map import Slider
+    from osu_input import SliderAction
     from osu_input import osu_to_screen, set_cursor
     import time as ttime
 
