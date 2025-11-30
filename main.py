@@ -10,7 +10,7 @@ from save_image import save_image
 from osu_input import *
 from read_map import *
 from config import SECOND_MONITOR
-from coord_queue import CoordQueue
+from coord_queue import CoordQueue, infer_to_queue
 from inference import get_model
 import supervision as svi
 
