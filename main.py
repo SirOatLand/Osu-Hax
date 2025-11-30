@@ -17,7 +17,7 @@ import supervision as svi
 latest_frame = None
 current_action = None
 
-MIN_CONFIDENCE = 0.8
+MIN_CONFIDENCE = 0.85
 
 capture = WindowsCapture(
     cursor_capture=None,
@@ -85,7 +85,7 @@ def main(save_image_mode, song_path):
         model_id="osu-project-2-9xzrs/2",
         api_key="n9ZqQYFxrPZCCverE0Lh"
     )
-    coord_queue = CoordQueue(threshold=25, cooldown_time=0.1)
+    coord_queue = CoordQueue(threshold=25, cooldown_time=0.2)
 
     wait_for_title_change()
     wait_for_title_change(timeout=10)
@@ -96,6 +96,7 @@ def main(save_image_mode, song_path):
         left_click = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000
         shift_pressed = ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
         if left_click & shift_pressed:
+            print("checkpoint pressed")
             start_time = osu_objects[0].time/1000
             osu_index += 1
             break
@@ -134,10 +135,6 @@ def main(save_image_mode, song_path):
             annotated_image = bounding_box_annotator.annotate(scene=screenshot, detections=detections)
             annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections)
             screenshot = annotated_image
-
-            if save_image_mode:
-                save_image(screenshot, folder_names=['image_dump'], img_count=1000, delay=0.2)
-                cv2.imshow("Detected Osu", screenshot)
             # cv2.imshow("Detected Osu", screenshot)
 
         # ============= Osu Input =============
