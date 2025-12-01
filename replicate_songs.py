@@ -2,9 +2,9 @@ from inference import get_model
 from osu_input import HitCircle, Slider, Spinner
 from coord_queue import CoordQueue, DataAI
 
-def make_osu_file(song_path, song_name, osu_objects, version="replicated"):
+def make_osu_file(map_path, osu_objects, version="replicated"):
 
-    title_field = "Title:" + song_name
+    title_field = "Title:" + map_path.split('/')[-1].split('.')[0] # get song name from path
     version_field = "Version:" + version
 
     osu_headers = ["osu file format v6", "[General]", "[Editor]", 
@@ -13,7 +13,7 @@ def make_osu_file(song_path, song_name, osu_objects, version="replicated"):
                    "[TimingPoints]", "0,0,0,0,0,0,0,0",
                    "[Colours]", "[HitObjects]"]
 
-    with open(song_path + song_name + ".osu", "w+") as f:
+    with open(map_path, "w+") as f:
         for head in osu_headers:
             f.write(head + "\n")
         for obj in osu_objects:
@@ -22,14 +22,6 @@ def make_osu_file(song_path, song_name, osu_objects, version="replicated"):
                 f.write(",".join(values))
                 f.write("\n")
 
-            elif isinstance(obj, Slider):
-                # line = SliderAction(obj)
-                pass
-
-            elif isinstance(obj, Spinner):
-                # line = SpinnerAction(obj)
-                pass
-
 def create_osu_objects(ai_data):
     object = None
     x, y = ai_data.get_osu_coords()
@@ -37,11 +29,6 @@ def create_osu_objects(ai_data):
     # HitCircle
     if ai_data.cls == 'circle':
         object = HitCircle(x, y, time, 1, 0)
-    # elif ai_data.cls == 'slider':
-    #     object = Slider(obj)
-    # # # Spinner
-    # elif ai_data.cls == 'spinner' :
-    #     object = Spinner(obj)
 
     return object
 
@@ -67,7 +54,7 @@ def add_song_queue(coord_queue: CoordQueue, model, screenshot, now_t):
         data_ai = DataAI(item)
         coord_queue.add(data_ai)
 
-def queue_to_file(coord_queue: CoordQueue | list, song_folder="./replicated_songs/", song_name="test1"):
+def queue_to_file(coord_queue: CoordQueue | list, map_path="./replicated_map/test1"):
     print("Making .osu file......")
     osu_objects = []
     if isinstance(coord_queue, CoordQueue):
@@ -76,7 +63,7 @@ def queue_to_file(coord_queue: CoordQueue | list, song_folder="./replicated_song
     else:
         for data_ai in coord_queue:
             osu_objects.append(create_osu_objects(data_ai))
-    make_osu_file(song_folder, song_name, osu_objects)
+    make_osu_file(map_path, osu_objects)
     print("Done!")
 
 if __name__ == '__main__':
