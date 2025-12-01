@@ -1,22 +1,16 @@
 import time
 import cv2
-import numpy as np
 import pyautogui
-import math
 from windows_capture import WindowsCapture, Frame, InternalCaptureControl
 import supervision as svi
 from inference import get_model
-from collections import deque
 from dotenv import load_dotenv
 import os
 
-from imgdiff import detect_imgdiff
-from save_image import save_image
 from osu_input import *
 from read_map import *
-from config import SECOND_MONITOR
 from coord_queue import CoordQueue, infer_to_queue
-from replicate_songs import add_song_queue, queue_to_file
+from replicate_songs import queue_to_file
 
 
 load_dotenv()
@@ -50,7 +44,7 @@ def on_closed():
     cv2.destroyAllWindows()
 
 
-def main(save_image_mode, replicate, song_path):
+def main(replicate, replicated_path, song_path):
     global start_time
     global osu_index
     global current_action
@@ -71,11 +65,6 @@ def main(save_image_mode, replicate, song_path):
     current_action = None
     AR_delay = (AR_delay - AR_DELAY_OFFSET)
 
-    # Click Start map on osu! screen
-    osu_start_x, osu_start_y = osu_to_screen(320, 170)
-    pyautogui.moveTo(osu_start_x, osu_start_y)
-    pyautogui.mouseDown()
-    pyautogui.mouseUp()
 
     # Loading Model
     model = get_model(
@@ -85,6 +74,12 @@ def main(save_image_mode, replicate, song_path):
 
     # Initializing objects queue
     coord_queue = CoordQueue(threshold_dist=OBJ_THRESHOLD, cooldown_time=OBJ_COOLDOWN, min_detect_count=OBJ_MIN_COUNT, threshold_t=0)
+
+    # Click Start map on osu! screen
+    osu_start_x, osu_start_y = osu_to_screen(320, 170)
+    pyautogui.moveTo(osu_start_x, osu_start_y)
+    pyautogui.mouseDown()
+    pyautogui.mouseUp()
 
     # Check process name change which indicate map is loaded
     wait_for_title_change(timeout=10)
@@ -213,9 +208,10 @@ def main(save_image_mode, replicate, song_path):
                 removed_queue = None
 
     if replicate:
-        queue_to_file(queue_record)
+        queue_to_file(queue_record, replicated_path)
 
 if __name__ == "__main__":
     # pyautogui.PAUSE = 0.05
     song_name = "cin_normal.osu"
-    main(save_image_mode=False, replicate=True, song_path="./test_songs/" + song_name)
+    main(replicate=True, replicated_path="./replicated_map/test1.osu", 
+         song_path="./test_songs/" + song_name)
