@@ -3,5 +3,5 @@ venv/
 __pycache__/
 debug/
 tempCodeRunnerFile.*
-test_songs/
 .env
+./replicated_map/
