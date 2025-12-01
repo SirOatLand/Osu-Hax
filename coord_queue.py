@@ -216,7 +216,7 @@ class CoordQueue:
                 expire_time = (time.perf_counter()*1000) + (self.cooldown_time*1000)
                 self.cooldown_coords.append((removed, expire_time))
                 # print(f"[Queue] Force-removed: {removed}")
-                return removed
+                return True
         return False
 
     def __len__(self):
