@@ -5,3 +5,5 @@ debug/
 tempCodeRunnerFile.*
 .env
 replicated_map/*
+
+!replicated_map/.gitkeep
