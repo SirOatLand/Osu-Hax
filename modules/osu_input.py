@@ -1,11 +1,12 @@
 import pyautogui
 import ctypes
-from config import *
-from read_map import *
 import time
 import win32gui
 import math
-from slidercalculation import bezier_point, sample_curve, point_at_progress, sample_polyline, scale_samples_to_length
+
+from .config import *
+from .read_map import *
+from .slidercalculation import bezier_point, sample_curve, point_at_progress, sample_polyline, scale_samples_to_length
 
 global screen_w, screen_h
 screen_w, screen_h = pyautogui.size()

@@ -1,6 +1,6 @@
 from inference import get_model
-from osu_input import HitCircle, Slider, Spinner
-from coord_queue import CoordQueue, DataAI
+from .osu_input import HitCircle, Slider, Spinner
+from .coord_queue import CoordQueue, DataAI
 
 def make_osu_file(map_path, osu_objects, version="replicated"):
 

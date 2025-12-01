@@ -6,14 +6,16 @@ import supervision as svi
 from inference import get_model
 from dotenv import load_dotenv
 import os
+import sys
 
-from osu_input import *
-from read_map import *
-from coord_queue import CoordQueue, infer_to_queue
-from replicate_songs import queue_to_file
+from modules.osu_input import *
+from modules.read_map import *
+from modules.coord_queue import CoordQueue, infer_to_queue
+from modules.replicate_songs import queue_to_file
 
 
 load_dotenv()
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'modules'))
 
 latest_frame = None
 current_action = None

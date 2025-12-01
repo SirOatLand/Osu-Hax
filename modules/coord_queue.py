@@ -1,9 +1,8 @@
 from collections import deque
 import time
 import math
-from config import *
-from osu_input import ai_to_screen
-from osu_input import get_osu_client_rect
+from .config import *
+from .osu_input import ai_to_screen, get_osu_client_rect
 
 def ai_to_screen(ai_x, ai_y, image_width, image_height):
     left, top, right, bottom = get_osu_client_rect()
