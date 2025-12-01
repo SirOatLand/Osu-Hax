@@ -72,6 +72,8 @@ def queue_to_file(coord_queue: CoordQueue, song_folder="./replicated_songs/", so
     osu_objects = []
     for data_ai in coord_queue.queue:
         osu_objects.append(create_osu_objects(data_ai))
+    for data_ai in coord_queue:
+         osu_objects.append(create_osu_objects(data_ai))
     make_osu_file(song_folder, song_name, osu_objects)
     print("Done!")
 
