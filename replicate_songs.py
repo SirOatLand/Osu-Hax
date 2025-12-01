@@ -67,13 +67,15 @@ def add_song_queue(coord_queue: CoordQueue, model, screenshot, now_t):
         data_ai = DataAI(item)
         coord_queue.add(data_ai)
 
-def queue_to_file(coord_queue: CoordQueue, song_folder="./replicated_songs/", song_name="test1"):
+def queue_to_file(coord_queue: CoordQueue | list, song_folder="./replicated_songs/", song_name="test1"):
     print("Making .osu file......")
     osu_objects = []
-    for data_ai in coord_queue.queue:
-        osu_objects.append(create_osu_objects(data_ai))
-    for data_ai in coord_queue:
-         osu_objects.append(create_osu_objects(data_ai))
+    if isinstance(coord_queue, CoordQueue):
+        for data_ai in coord_queue.queue:
+            osu_objects.append(create_osu_objects(data_ai))
+    else:
+        for data_ai in coord_queue:
+            osu_objects.append(create_osu_objects(data_ai))
     make_osu_file(song_folder, song_name, osu_objects)
     print("Done!")
 
